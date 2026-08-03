@@ -1,0 +1,117 @@
+.lobby {
+  width: 100%;
+  max-width: 640px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lobby-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+
+.lobby-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(32px, 6vw, 56px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
+}
+
+.lobby-title-accent {
+  color: var(--accent);
+}
+
+.lobby-sub {
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 440px;
+  margin: 0 0 36px;
+}
+
+.lobby-cta {
+  background: var(--accent);
+  color: #1a1206;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  padding: 16px 40px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 12px 30px -10px rgba(255, 138, 61, 0.5);
+}
+
+.lobby-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -10px rgba(255, 138, 61, 0.65);
+}
+
+.lobby-cta:active {
+  transform: translateY(0);
+}
+
+.lobby-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.lobby-premium {
+  margin-top: 44px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 24px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.lobby-premium-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+
+.lobby-premium-fields {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.lobby-premium-fields label {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lobby-premium-fields input,
+.lobby-premium-fields select {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+}

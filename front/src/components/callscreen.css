@@ -1,0 +1,144 @@
+.call-screen {
+  width: 100%;
+  max-width: 1100px;
+  height: min(720px, 88vh);
+  display: flex;
+  gap: 16px;
+}
+
+.call-video-area {
+  position: relative;
+  flex: 1;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-panel);
+}
+
+.call-remote {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0c0d11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-remote-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.call-connecting {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  background: rgba(20, 21, 26, 0.7);
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+}
+
+.call-connecting-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.call-local-video {
+  position: absolute;
+  bottom: 96px;
+  right: 20px;
+  width: 160px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--panel-border);
+  background: #0c0d11;
+  transform: scaleX(-1); /* efeito espelho, mais natural pra webcam própria */
+}
+
+.call-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  background: rgba(20, 21, 26, 0.85);
+  backdrop-filter: blur(6px);
+  padding: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+}
+
+.call-btn {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.call-btn:hover {
+  background: var(--ink-soft);
+}
+
+.call-btn.off {
+  color: var(--danger);
+}
+
+.call-btn.next {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.call-btn.end {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.call-chat-column {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 860px) {
+  .call-screen {
+    flex-direction: column;
+    height: auto;
+  }
+  .call-video-area {
+    height: 70vh;
+  }
+  .call-chat-column {
+    width: 100%;
+    height: 260px;
+  }
+}

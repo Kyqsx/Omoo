@@ -1,0 +1,41 @@
+/*
+  TOKENS DE DESIGN — "Sinal"
+  ---------------------------------------------------------------
+  Conceito: cada conversa é tratada como sintonizar uma frequência de
+  rádio — você "procura um sinal", "sintoniza" com um estranho, e a tela
+  de busca é um scanner/equalizador em vez de um spinner genérico.
+
+  Paleta: tons de tinta/grafite (não preto puro) + âmbar de rádio antigo
+  como cor de destaque. Verde reservado só para o estado "conectado".
+*/
+
+:root {
+  /* Cor */
+  --ink: #14151a;
+  --ink-soft: #1a1c23;
+  --panel: #1d1f28;
+  --panel-border: #2b2e39;
+  --text: #f2efe8;
+  --text-muted: #9195a3;
+  --text-faint: #5c606e;
+
+  --accent: #ff8a3d;
+  --accent-strong: #ff6b1a;
+  --accent-soft: rgba(255, 138, 61, 0.14);
+
+  --connected: #4ade80;
+  --connected-soft: rgba(74, 222, 128, 0.14);
+  --danger: #f0555c;
+  --danger-soft: rgba(240, 85, 92, 0.14);
+
+  /* Tipografia */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Espaçamento e forma */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --shadow-panel: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+}
