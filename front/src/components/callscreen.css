@@ -124,6 +124,14 @@
   color: var(--danger);
 }
 
+.call-btn.report {
+  color: var(--text-faint);
+}
+
+.call-btn.report:hover {
+  color: var(--danger);
+}
+
 .call-chat-column {
   width: 300px;
   flex-shrink: 0;

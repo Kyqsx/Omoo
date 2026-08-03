@@ -11,29 +11,52 @@ const pool = require('./db');
 
 /**
  * Cria uma sessão de Checkout do Stripe para assinatura recorrente mensal.
- * O frontend chama esta rota e redireciona o usuário para "session.url".
+ * Agora exige login (ver authMiddleware.requireAuth) — o userId vem do
+ * token JWT, não mais de um campo que o próprio cliente enviava.
+ *
+ * Também resolve o problema de "que usuário é esse pagamento": criamos
+ * (ou reaproveitamos) um Stripe Customer ligado ao nosso userId ANTES do
+ * checkout, e salvamos o ID desse customer no nosso banco imediatamente.
+ * Assim, quando o webhook chegar depois, o cruzamento já está pronto.
  */
 async function createCheckoutSession(req, res) {
   try {
-    const { userId, email } = req.body;
+    const userId = req.userId; // vem do authMiddleware.requireAuth
 
-    if (!userId || !email) {
-      return res.status(400).json({ error: 'userId e email são obrigatórios.' });
+    const userResult = await pool.query(
+      'SELECT email, stripe_customer_id FROM users WHERE id = $1',
+      [userId]
+    );
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+    const user = userResult.rows[0];
+
+    let stripeCustomerId = user.stripe_customer_id;
+
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { userId: String(userId) },
+      });
+      stripeCustomerId = customer.id;
+
+      await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [
+        stripeCustomerId,
+        userId,
+      ]);
     }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription', // assinatura recorrente (não pagamento único)
       payment_method_types: ['card'],
-      customer_email: email,
+      customer: stripeCustomerId,
       line_items: [
         {
           price: process.env.STRIPE_PRICE_ID, // Price ID criado no Dashboard Stripe
           quantity: 1,
         },
       ],
-      // "metadata" viaja junto com o evento do webhook. É assim que vamos
-      // saber, no webhook, a QUAL usuário do nosso banco esse pagamento
-      // pertence.
       metadata: {
         userId: String(userId),
       },

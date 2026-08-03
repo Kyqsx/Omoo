@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
 import ChatPanel from './ChatPanel';
+import ReportModal from './ReportModal';
 import './callscreen.css';
 
 export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
@@ -22,6 +23,7 @@ export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
@@ -76,6 +78,9 @@ export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
           <button className="call-btn" onClick={() => setChatOpen((v) => !v)}>
             Chat
           </button>
+          <button className="call-btn report" onClick={() => setReportOpen(true)}>
+            Denunciar
+          </button>
           <button className="call-btn next" onClick={onNext}>
             Próximo
           </button>
@@ -90,6 +95,8 @@ export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
           <ChatPanel roomId={roomId} />
         </div>
       )}
+
+      {reportOpen && <ReportModal onClose={() => setReportOpen(false)} />}
     </div>
   );
 }

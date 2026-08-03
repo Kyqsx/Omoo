@@ -17,6 +17,7 @@ const { Server } = require('socket.io');
 
 const { connectRedis } = require('./redis');
 const stripeRoutes = require('./stripeRoutes');
+const authRoutes = require('./authRoutes');
 const { handleStripeWebhook } = require('./stripeController');
 const { registerMatchmakingHandlers } = require('./matchmaking');
 
@@ -65,6 +66,9 @@ app.get('/', (req, res) => {
 
 // Rotas de pagamento (ex: POST /api/create-checkout-session)
 app.use('/api', stripeRoutes);
+
+// Rotas de autenticação (ex: POST /api/auth/register, /api/auth/login)
+app.use('/api/auth', authRoutes);
 
 // ---------------------------------------------------------------------
 // INICIALIZAÇÃO

@@ -1,33 +1,46 @@
 // src/App.jsx
 //
 // Controla em qual "tela" o usuário está: lobby -> searching -> call.
-// Também escuta os eventos globais do socket (match_found, peer_left,
-// match_error) que fazem o app transitar entre essas telas.
+// Também gerencia a sessão (usuário logado ou não) e o checkout Premium.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { socket } from './lib/socket';
+import { fetchCurrentUser, getToken } from './lib/auth';
 import Lobby from './components/Lobby';
 import Searching from './components/Searching';
 import CallScreen from './components/CallScreen';
+import AuthModal from './components/AuthModal';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 export default function App() {
   const [screen, setScreen] = useState('lobby'); // 'lobby' | 'searching' | 'call'
   const [match, setMatch] = useState(null); // { roomId, peerId, initiator }
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Guarda os últimos filtros usados, para o botão "Próximo" repetir a
-  // mesma busca (ex: continuar filtrando por país) sem o usuário precisar
-  // reconfigurar tudo de novo.
-  const lastSearchRef = useRef({ filters: {}, userId: undefined });
+  const [user, setUser] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
 
-  const startSearch = useCallback((filters = {}, userId = undefined) => {
-    lastSearchRef.current = { filters, userId };
+  // Guarda os últimos filtros usados, para o botão "Próximo" repetir a
+  // mesma busca sem o usuário precisar reconfigurar tudo de novo.
+  const lastFiltersRef = useRef({});
+
+  // Ao abrir o app, tenta recuperar a sessão a partir do token salvo.
+  useEffect(() => {
+    fetchCurrentUser().then((u) => {
+      if (u) setUser(u);
+    });
+  }, []);
+
+  const startSearch = useCallback((filters = {}) => {
+    lastFiltersRef.current = filters;
     setErrorMsg('');
     setMatch(null);
     setScreen('searching');
 
     if (!socket.connected) socket.connect();
-    socket.emit('find_match', { filters, userId });
+    socket.emit('find_match', { filters });
   }, []);
 
   useEffect(() => {
@@ -41,11 +54,10 @@ export default function App() {
       setScreen('lobby');
     }
 
-    // O outro lado saiu da chamada (fechou aba, clicou em sair, etc).
-    // Voltamos automaticamente para a busca por um novo par.
+    // O outro lado saiu da chamada. Voltamos automaticamente pra busca.
     function onPeerLeft() {
       setMatch(null);
-      startSearch(lastSearchRef.current.filters, lastSearchRef.current.userId);
+      startSearch(lastFiltersRef.current);
     }
 
     socket.on('match_found', onMatchFound);
@@ -66,7 +78,7 @@ export default function App() {
 
   const nextMatch = useCallback(() => {
     socket.emit('leave_room');
-    startSearch(lastSearchRef.current.filters, lastSearchRef.current.userId);
+    startSearch(lastFiltersRef.current);
   }, [startSearch]);
 
   const endCall = useCallback(() => {
@@ -76,6 +88,30 @@ export default function App() {
     socket.disconnect();
   }, []);
 
+  const handleSubscribe = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setAuthModalOpen(true);
+      return;
+    }
+    setSubscribing(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro ao iniciar checkout.');
+      window.location.href = data.checkoutUrl; // redireciona pro Stripe
+    } catch (err) {
+      setErrorMsg(err.message);
+      setSubscribing(false);
+    }
+  }, []);
+
   return (
     <div className="app-shell">
       <div className="brand">
@@ -83,7 +119,16 @@ export default function App() {
         Sinal
       </div>
 
-      {screen === 'lobby' && <Lobby onStart={startSearch} errorMsg={errorMsg} />}
+      {screen === 'lobby' && (
+        <Lobby
+          onStart={startSearch}
+          errorMsg={errorMsg}
+          user={user}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onSubscribe={handleSubscribe}
+          subscribing={subscribing}
+        />
+      )}
       {screen === 'searching' && <Searching onCancel={cancelSearch} />}
       {screen === 'call' && match && (
         <CallScreen
@@ -92,6 +137,16 @@ export default function App() {
           initiator={match.initiator}
           onNext={nextMatch}
           onEnd={endCall}
+        />
+      )}
+
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onAuthenticated={(u) => {
+            setUser(u);
+            setAuthModalOpen(false);
+          }}
         />
       )}
     </div>

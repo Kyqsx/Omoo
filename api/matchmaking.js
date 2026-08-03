@@ -19,6 +19,7 @@
 
 const { randomUUID } = require('crypto');
 const pool = require('./db');
+const { verifyToken } = require('./authController');
 
 // Prefixo padrão usado nas chaves de fila do Redis.
 const QUEUE_GERAL = 'fila:geral';
@@ -88,6 +89,14 @@ async function tryMatch(io, redisClient, queueKey) {
   socketA.data.roomId = roomId;
   socketB.data.roomId = roomId;
 
+  // Guardamos quem é o par de cada um — necessário pro botão de denúncia,
+  // que precisa saber "quem eu estava conversando" mesmo depois de o
+  // parceiro sair da sala.
+  socketA.data.peerSocketId = socketB.id;
+  socketA.data.peerUserId = socketB.data.userId || null;
+  socketB.data.peerSocketId = socketA.id;
+  socketB.data.peerUserId = socketA.data.userId || null;
+
   // Avisa cada lado quem é o "peer" (parceiro) e o roomId.
   // O frontend usa isso para iniciar a conexão WebRTC (criar RTCPeerConnection,
   // gerar "offer", etc). Definimos socketA como "iniciador" da chamada
@@ -120,7 +129,18 @@ async function leaveQueue(redisClient, socket) {
  */
 function registerMatchmakingHandlers(io, redisClient) {
   io.on('connection', (socket) => {
-    console.log(`[Socket.io] Novo cliente conectado: ${socket.id}`);
+    // Autenticação opcional: usuários Free continuam funcionando sem token
+    // (chat anônimo). Se um token válido vier no handshake, guardamos o
+    // userId real no socket — é ele que vamos confiar dali pra frente,
+    // nunca o que o cliente disser depois em outros eventos.
+    const token = socket.handshake.auth?.token;
+    const payload = verifyToken(token);
+    socket.data.userId = payload?.userId || null;
+
+    console.log(
+      `[Socket.io] Novo cliente conectado: ${socket.id}` +
+        (socket.data.userId ? ` (usuário #${socket.data.userId})` : ' (anônimo)')
+    );
 
     /**
      * Evento disparado pelo frontend quando o usuário clica em
@@ -128,13 +148,17 @@ function registerMatchmakingHandlers(io, redisClient) {
      *
      * payload esperado:
      * {
-     *   userId: 123,                 // id do usuário no PostgreSQL (opcional p/ free anônimo)
      *   filters: { country: 'brasil' } // só usado se for Premium
      * }
+     *
+     * O userId NÃO vem mais do payload — vem do token JWT verificado na
+     * conexão (socket.data.userId). Isso evita que alguém finja ser
+     * Premium só mandando um ID qualquer no payload.
      */
     socket.on('find_match', async (payload = {}) => {
       try {
-        const { userId, filters } = payload;
+        const { filters } = payload;
+        const userId = socket.data.userId;
 
         const premium = await isUserPremium(userId);
 
@@ -191,6 +215,51 @@ function registerMatchmakingHandlers(io, redisClient) {
     // Chat de texto simples dentro da sala (opcional, mas citado no requisito)
     socket.on('chat_message', ({ roomId, message }) => {
       socket.to(roomId).emit('chat_message', { message, from: socket.id });
+    });
+
+    /**
+     * Denúncia do parceiro atual (ou do último parceiro, caso ele já
+     * tenha saído da sala). Guarda no banco pra moderação revisar depois.
+     *
+     * payload esperado: { reason: 'nudez' | 'assedio' | 'spam' | 'outro', details?: string }
+     */
+    socket.on('report_user', async (payload = {}) => {
+      try {
+        const { reason, details } = payload;
+        const validReasons = ['nudez', 'assedio', 'spam', 'menor_de_idade', 'outro'];
+
+        if (!reason || !validReasons.includes(reason)) {
+          socket.emit('report_error', { message: 'Motivo de denúncia inválido.' });
+          return;
+        }
+
+        const peerSocketId = socket.data.peerSocketId;
+        if (!peerSocketId) {
+          socket.emit('report_error', { message: 'Não há ninguém para denunciar agora.' });
+          return;
+        }
+
+        await pool.query(
+          `INSERT INTO reports
+             (room_id, reporter_user_id, reporter_socket_id, reported_user_id, reported_socket_id, reason, details)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            socket.data.roomId || 'sala_encerrada',
+            socket.data.userId,
+            socket.id,
+            socket.data.peerUserId,
+            peerSocketId,
+            reason,
+            details || null,
+          ]
+        );
+
+        console.log(`[Report] ${socket.id} denunciou ${peerSocketId} por "${reason}"`);
+        socket.emit('report_submitted');
+      } catch (err) {
+        console.error('[Matchmaking] Erro ao registrar denúncia:', err);
+        socket.emit('report_error', { message: 'Erro ao enviar denúncia.' });
+      }
     });
 
     // Usuário quer encerrar o chat atual e o parceiro deve ser avisado

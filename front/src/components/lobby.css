@@ -70,31 +70,59 @@
   margin-bottom: 20px;
 }
 
-.lobby-premium {
+.lobby-account {
   margin-top: 44px;
   border-top: 1px solid var(--panel-border);
   padding-top: 24px;
   width: 100%;
   max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
-.lobby-premium-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.lobby-account-link {
+  background: transparent;
+  border: none;
+  color: var(--accent);
   font-size: 13px;
-  color: var(--text-faint);
   cursor: pointer;
+  text-decoration: underline;
   font-family: var(--font-mono);
 }
 
-.lobby-premium-fields {
-  margin-top: 16px;
+.lobby-account-link.muted {
+  color: var(--text-faint);
+}
+
+.lobby-account-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lobby-premium-upsell {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.lobby-premium-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 14px;
-  text-align: left;
+  width: 100%;
+}
+
+.lobby-premium-badge {
+  color: var(--connected);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  margin: 0;
 }
 
 .lobby-premium-fields label {
@@ -103,9 +131,11 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
+  max-width: 260px;
+  text-align: left;
 }
 
-.lobby-premium-fields input,
 .lobby-premium-fields select {
   background: var(--panel);
   border: 1px solid var(--panel-border);

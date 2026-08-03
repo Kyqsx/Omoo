@@ -1,13 +1,12 @@
 // src/components/Lobby.jsx
 //
-// Primeira tela: usuário escolhe iniciar a busca. Se marcar "Sou Premium",
-// aparecem os filtros (país). Isso é só uma simulação de UI — em produção,
-// o status Premium real deve vir de autenticação (login), não de um
-// checkbox que o próprio usuário marca! Deixei um campo de "ID de usuário"
-// aqui apenas para você TESTAR o fluxo Premium do backend sem já ter
-// construído login. Veja o comentário mais abaixo.
+// Primeira tela: usuário escolhe iniciar a busca. Se estiver logado E for
+// Premium, aparecem os filtros (país). O status Premium/logado agora vem
+// de verdade do backend (via token JWT), não mais de um campo digitado
+// pelo próprio usuário.
 
 import { useState } from 'react';
+import { logout } from '../lib/auth';
 import './lobby.css';
 
 const COUNTRIES = [
@@ -16,17 +15,22 @@ const COUNTRIES = [
   { value: 'eua', label: 'Estados Unidos' },
 ];
 
-export default function Lobby({ onStart, errorMsg }) {
-  const [isPremiumTest, setIsPremiumTest] = useState(false);
-  const [userId, setUserId] = useState('');
+export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onSubscribe, subscribing }) {
   const [country, setCountry] = useState(COUNTRIES[0].value);
 
+  const isPremium = user?.is_premium === true;
+
   function handleStart() {
-    if (isPremiumTest) {
-      onStart({ country }, userId || undefined);
+    if (isPremium) {
+      onStart({ country });
     } else {
       onStart({});
     }
+  }
+
+  function handleLogout() {
+    logout();
+    window.location.reload(); // forma simples de resetar todo o estado de sessão
   }
 
   return (
@@ -48,27 +52,28 @@ export default function Lobby({ onStart, errorMsg }) {
         Encontrar alguém
       </button>
 
-      <div className="lobby-premium">
-        <label className="lobby-premium-toggle">
-          <input
-            type="checkbox"
-            checked={isPremiumTest}
-            onChange={(e) => setIsPremiumTest(e.target.checked)}
-          />
-          Testar como usuário Premium (dev)
-        </label>
+      <div className="lobby-account">
+        {!user && (
+          <button className="lobby-account-link" onClick={onOpenAuth}>
+            Entrar / criar conta (para filtros Premium)
+          </button>
+        )}
 
-        {isPremiumTest && (
+        {user && !isPremium && (
+          <div className="lobby-premium-upsell">
+            <p>Logado como {user.email}.</p>
+            <button className="lobby-account-link" onClick={onSubscribe} disabled={subscribing}>
+              {subscribing ? 'Abrindo checkout...' : 'Assinar Premium (filtrar por país)'}
+            </button>
+            <button className="lobby-account-link muted" onClick={handleLogout}>
+              Sair da conta
+            </button>
+          </div>
+        )}
+
+        {user && isPremium && (
           <div className="lobby-premium-fields">
-            <label>
-              ID do usuário no banco (marcado como is_premium = true)
-              <input
-                type="text"
-                placeholder="ex: 1"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-              />
-            </label>
+            <p className="lobby-premium-badge">✓ Conta Premium — {user.email}</p>
             <label>
               Filtrar por país
               <select value={country} onChange={(e) => setCountry(e.target.value)}>
@@ -79,6 +84,9 @@ export default function Lobby({ onStart, errorMsg }) {
                 ))}
               </select>
             </label>
+            <button className="lobby-account-link muted" onClick={handleLogout}>
+              Sair da conta
+            </button>
           </div>
         )}
       </div>
