@@ -317,16 +317,41 @@ A presença (`social.js`) usa Redis Sets, então já funciona mesmo se você
 rodar mais de uma instância do backend na Railway — não depende de estado
 em memória de um processo só.
 
-### Se a chamada ainda ficar presa em "Conectando..."
+### Servidor TURN (resolvido o "fica preso em Conectando...")
 
-Corrigimos uma corrida (offer/answer chegando antes da conexão local
-existir), que era a causa mais comum disso. Se mesmo assim continuar
-acontecendo com pessoas em redes diferentes (uma no 4G, outra numa rede
-corporativa, etc.), o motivo provável é a ausência de um servidor **TURN**
-— hoje só temos STUN (`stun:stun.l.google.com:19302`), que só funciona
-quando os dois lados conseguem abrir uma rota direta. Redes com NAT
-simétrico/firewall restritivo não conseguem, e nesse caso é obrigatório
-ter um TURN relay. Opções rápidas: um serviço gerenciado (ex: Metered,
-Twilio Network Traversal, Cloudflare Calls) ou seu próprio `coturn`. Depois
-é só adicionar as credenciais no array `ICE_SERVERS` de
-`front/src/hooks/useWebRTC.js` e `useGroupWebRTC.js`.
+Confirmamos com os logs: a sinalização (offer/answer/ICE) sempre funcionou
+certinho — o problema era mesmo a falta de um servidor **TURN**. Com só
+STUN (`stun:stun.l.google.com:19302`), a conexão só fecha quando os dois
+lados conseguem abrir uma rota direta entre si; em redes com NAT
+simétrico/firewall mais restritivo (4G, wifi corporativo/de faculdade)
+isso nunca acontece, e o `iceConnectionState` vai pra `failed`.
+
+Agora `ICE_SERVERS` (em `front/src/hooks/useWebRTC.js` e
+`useGroupWebRTC.js`) já inclui o TURN público e gratuito do **OpenRelay
+(Metered)**, sem precisar de cadastro:
+
+```js
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+];
+```
+
+**Isso é suficiente pra testar e lançar**, mas é um serviço de demonstração
+com limite de banda mensal — não é pra depender dele com uma base de
+usuários grande rodando chamadas o dia inteiro. Quando o Omoo começar a
+crescer de verdade, troque essas credenciais por um TURN dedicado:
+
+- **Gerenciado** (mais rápido de configurar): Metered.ca (plano pago),
+  Twilio Network Traversal Service, ou Cloudflare Calls.
+- **Seu próprio**: rodar `coturn` num serviço da Railway — dá mais
+  controle e fica mais barato em escala, mas dá mais trabalho de operar.
+
+Nos dois casos, é só trocar as entradas de `urls`/`username`/`credential`
+no array `ICE_SERVERS` dos dois hooks (idealmente vindo de uma variável de
+ambiente, não hardcoded, já que credenciais de TURN pago não devem ir pro
+repositório).
+

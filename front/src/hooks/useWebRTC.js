@@ -18,13 +18,28 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { socket } from '../lib/socket';
 
-// Servidores STUN públicos do Google — ajudam cada navegador a descobrir
-// seu próprio endereço público (necessário para conectar através de NAT).
-// Isso é suficiente para testes e para boa parte das redes domésticas.
-// Em produção, é comum também configurar um servidor TURN (ex: Twilio,
-// Metered, ou seu próprio coturn) para os casos em que a conexão direta
-// não é possível (redes corporativas/4G restritivas). Veja o README.
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+// Servidores STUN + TURN. STUN sozinho só funciona quando os dois lados
+// conseguem abrir uma rota direta entre si — em redes com NAT restritivo
+// (4G, wifi corporativo/de faculdade, etc.) isso falha, e a conexão fica
+// presa em "checking" e depois cai pra "failed". É pra isso que serve um
+// servidor TURN: ele relay-eia o áudio/vídeo quando a conexão direta não
+// rola. Aqui embaixo usamos o TURN público e gratuito do OpenRelay
+// (Metered) — funciona sem cadastro, mas tem limite de banda mensal
+// generoso o bastante pra testar/lançar, não pra escala grande. Pra
+// produção de verdade, troque por um TURN dedicado (Metered pago, Twilio
+// Network Traversal, Cloudflare Calls, ou seu próprio coturn) — veja o
+// README.
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
 
 /**
  * Pede câmera+mic com facingMode como preferência ("ideal"), e se mesmo
