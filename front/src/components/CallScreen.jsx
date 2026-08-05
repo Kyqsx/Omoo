@@ -6,12 +6,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { socket } from '../lib/socket';
 import ChatPanel from './ChatPanel';
 import ReportModal from './ReportModal';
 import './callscreen.css';
 
-export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
-  const { localStream, remoteStream, connectionState } = useWebRTC({
+export default function CallScreen({ roomId, initiator, isLoggedIn, onNext, onEnd }) {
+  const { localStream, remoteStream, connectionState, switchCamera } = useWebRTC({
     roomId,
     initiator,
     active: true,
@@ -24,6 +25,44 @@ export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
   const [camOn, setCamOn] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [friendStatus, setFriendStatus] = useState(null); // null | 'sent' | 'error'
+
+  // Só mostra o botão de inverter câmera se o dispositivo tiver mais de
+  // uma câmera (a maioria dos notebooks/desktops só tem uma).
+  useEffect(() => {
+    navigator.mediaDevices
+      ?.enumerateDevices()
+      .then((devices) => {
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        setHasMultipleCameras(videoInputs.length > 1);
+      })
+      .catch(() => setHasMultipleCameras(false));
+  }, []);
+
+  // Reseta o status do botão "Adicionar amigo" a cada novo parceiro
+  useEffect(() => {
+    setFriendStatus(null);
+  }, [roomId]);
+
+  useEffect(() => {
+    function onFriendSent() {
+      setFriendStatus('sent');
+    }
+    function onFriendError() {
+      setFriendStatus('error');
+    }
+    socket.on('friend_request_sent', onFriendSent);
+    socket.on('friend_error', onFriendError);
+    return () => {
+      socket.off('friend_request_sent', onFriendSent);
+      socket.off('friend_error', onFriendError);
+    };
+  }, []);
+
+  function handleAddFriend() {
+    socket.emit('add_friend_incall');
+  }
 
   useEffect(() => {
     if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
@@ -75,9 +114,24 @@ export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
           >
             {camOn ? 'Câmera' : 'Sem câmera'}
           </button>
+          {hasMultipleCameras && (
+            <button className="call-btn" onClick={switchCamera} aria-label="Inverter câmera">
+              Inverter câmera
+            </button>
+          )}
           <button className="call-btn" onClick={() => setChatOpen((v) => !v)}>
             Chat
           </button>
+          {isLoggedIn && (
+            <button
+              className="call-btn"
+              onClick={handleAddFriend}
+              disabled={friendStatus === 'sent'}
+              aria-label="Adicionar amigo"
+            >
+              {friendStatus === 'sent' ? 'Pedido enviado' : 'Adicionar amigo'}
+            </button>
+          )}
           <button className="call-btn report" onClick={() => setReportOpen(true)}>
             Denunciar
           </button>
@@ -88,6 +142,10 @@ export default function CallScreen({ roomId, initiator, onNext, onEnd }) {
             Sair
           </button>
         </div>
+
+        {friendStatus === 'error' && (
+          <div className="call-friend-notice">Não foi possível enviar o pedido de amizade.</div>
+        )}
       </div>
 
       {chatOpen && (

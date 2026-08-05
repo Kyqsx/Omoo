@@ -28,11 +28,11 @@ async function parseJsonResponse(response) {
   return data;
 }
 
-export async function register(email, password) {
+export async function register(email, password, username, gender) {
   const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, username, gender }),
   });
   const data = await parseJsonResponse(response);
   setToken(data.token);

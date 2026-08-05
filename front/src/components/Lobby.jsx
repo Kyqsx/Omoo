@@ -15,7 +15,7 @@ const COUNTRIES = [
   { value: 'eua', label: 'Estados Unidos' },
 ];
 
-export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onSubscribe, subscribing }) {
+export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onOpenFriends, onSubscribe, subscribing }) {
   const [country, setCountry] = useState(COUNTRIES[0].value);
 
   const isPremium = user?.is_premium === true;
@@ -62,6 +62,9 @@ export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onSubscribe
         {user && !isPremium && (
           <div className="lobby-premium-upsell">
             <p>Logado como {user.email}.</p>
+            <button className="lobby-account-link" onClick={onOpenFriends}>
+              Amigos
+            </button>
             <button className="lobby-account-link" onClick={onSubscribe} disabled={subscribing}>
               {subscribing ? 'Abrindo checkout...' : 'Assinar Premium (filtrar por país)'}
             </button>
@@ -84,6 +87,9 @@ export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onSubscribe
                 ))}
               </select>
             </label>
+            <button className="lobby-account-link" onClick={onOpenFriends}>
+              Amigos
+            </button>
             <button className="lobby-account-link muted" onClick={handleLogout}>
               Sair da conta
             </button>

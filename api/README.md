@@ -267,3 +267,52 @@ produção:
   redes corporativas/móveis bloqueiam.
 - Persistir métricas de fila (tempo médio de espera, etc.) se quiser depois
   otimizar a experiência.
+
+## Atualização — Amigos, chamada em grupo, admin e melhorias de perfil
+
+Essa leva adicionou: seleção de gênero e `username` no cadastro, inverter
+câmera na chamada, sistema de amigos, chamada em grupo (mesh WebRTC, até 4
+pessoas) e a primeira versão do dashboard admin.
+
+### O que rodar depois do deploy
+
+1. **Rode o `schema.sql` de novo** no SQL Editor do Supabase — ele usa
+   `CREATE TABLE IF NOT EXISTS` e `ADD COLUMN IF NOT EXISTS` não, então pra
+   colunas novas em uma tabela que já existe (`username`, `gender`,
+   `is_admin`, `is_banned` em `users`; `reviewed` em `reports`) rode também:
+   ```sql
+   ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(30) UNIQUE;
+   ALTER TABLE users ADD COLUMN IF NOT EXISTS gender VARCHAR(20);
+   ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+   ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE;
+   ALTER TABLE reports ADD COLUMN IF NOT EXISTS reviewed BOOLEAN NOT NULL DEFAULT FALSE;
+   ```
+   Depois rode o restante do `schema.sql` (a tabela `friendships` inteira),
+   já que ela é nova.
+
+2. **Promova seu primeiro admin manualmente** (ainda não existe UI pra
+   isso, de propósito — é uma ação sensível):
+   ```sql
+   UPDATE users SET is_admin = true WHERE email = 'seu-email@exemplo.com';
+   ```
+   Depois disso, entre em `/admin` no frontend com esse login.
+
+3. **`JWT_SECRET`** continua sendo obrigatório na Railway (se ainda não
+   configurou, gere um valor aleatório longo e adicione nas Variables do
+   serviço backend).
+
+### Novos eventos de socket
+
+- `add_friend_incall` — pede amizade pro parceiro atual da chamada 1:1
+- `friend_request_received` / `friend_request_sent` / `friend_error`
+- `group_call_invite` / `group_call_invite_received` / `group_call_respond`
+- `group_call_room` / `group_call_joined` / `group_call_peer_joined` / `group_call_peer_left`
+- `group_webrtc_offer` / `group_webrtc_answer` / `group_webrtc_ice_candidate`
+  (sinalização da malha — sempre com `targetSocketId`, diferente da versão
+  1:1 que usa a room inteira)
+
+### Limitação conhecida da presença online
+
+A presença (`social.js`) usa Redis Sets, então já funciona mesmo se você
+rodar mais de uma instância do backend na Railway — não depende de estado
+em memória de um processo só.

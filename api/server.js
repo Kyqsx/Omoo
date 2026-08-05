@@ -18,8 +18,11 @@ const { Server } = require('socket.io');
 const { connectRedis } = require('./redis');
 const stripeRoutes = require('./stripeRoutes');
 const authRoutes = require('./authRoutes');
+const friendRoutes = require('./friendRoutes');
+const adminRoutes = require('./adminRoutes');
 const { handleStripeWebhook } = require('./stripeController');
 const { registerMatchmakingHandlers } = require('./matchmaking');
+const { registerSocialHandlers } = require('./social');
 
 const app = express();
 const server = http.createServer(app); // servidor HTTP "cru", necessário para o Socket.io "grudar" nele
@@ -70,6 +73,12 @@ app.use('/api', stripeRoutes);
 // Rotas de autenticação (ex: POST /api/auth/register, /api/auth/login)
 app.use('/api/auth', authRoutes);
 
+// Rotas de amigos (ex: GET /api/friends, POST /api/friends/request)
+app.use('/api/friends', friendRoutes);
+
+// Rotas do dashboard admin (ex: GET /api/admin/stats) — protegidas por requireAdmin
+app.use('/api/admin', adminRoutes);
+
 // ---------------------------------------------------------------------
 // INICIALIZAÇÃO
 // ---------------------------------------------------------------------
@@ -82,7 +91,11 @@ async function start() {
     const redisClient = await connectRedis();
 
     // Registra todos os eventos de socket (find_match, webrtc_offer, etc.)
+    // IMPORTANTE: matchmaking precisa ser registrado ANTES de social, porque
+    // é ele quem verifica o JWT e preenche socket.data.userId — social.js
+    // só lê esse valor, não autentica de novo.
     registerMatchmakingHandlers(io, redisClient);
+    registerSocialHandlers(io, redisClient);
 
     server.listen(PORT, () => {
       console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);

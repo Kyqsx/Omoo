@@ -70,7 +70,8 @@
   color: var(--text-muted);
 }
 
-.auth-form input {
+.auth-form input,
+.auth-form select {
   background: var(--ink-soft);
   border: 1px solid var(--panel-border);
   color: var(--text);

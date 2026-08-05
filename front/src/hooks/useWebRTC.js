@@ -30,8 +30,11 @@ export function useWebRTC({ roomId, initiator, active }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [connectionState, setConnectionState] = useState('new');
+  // 'user' = câmera frontal, 'environment' = câmera traseira (celular)
+  const [facingMode, setFacingMode] = useState('user');
 
   const pcRef = useRef(null);
+  const facingModeRef = useRef('user');
 
   const cleanup = useCallback(() => {
     pcRef.current?.close();
@@ -51,7 +54,7 @@ export function useWebRTC({ roomId, initiator, active }) {
     async function setup() {
       // 1) Pede câmera + microfone ao navegador
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { facingMode: facingModeRef.current },
         audio: true,
       });
       if (cancelled) {
@@ -135,5 +138,42 @@ export function useWebRTC({ roomId, initiator, active }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, roomId, initiator]);
 
-  return { localStream, remoteStream, connectionState };
+  /**
+   * Troca entre câmera frontal e traseira em tempo real, sem recriar a
+   * conexão. Pede um novo stream de vídeo com o facingMode oposto e usa
+   * replaceTrack() no sender do WebRTC — o outro lado nem percebe uma
+   * "reconexão", só vê o vídeo trocar.
+   */
+  const switchCamera = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc || !localStream) return;
+
+    const nextFacing = facingModeRef.current === 'user' ? 'environment' : 'user';
+
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: nextFacing },
+        audio: false,
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) return;
+
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+      if (sender) await sender.replaceTrack(newVideoTrack);
+
+      const oldVideoTrack = localStream.getVideoTracks()[0];
+      if (oldVideoTrack) {
+        localStream.removeTrack(oldVideoTrack);
+        oldVideoTrack.stop();
+      }
+      localStream.addTrack(newVideoTrack);
+
+      facingModeRef.current = nextFacing;
+      setFacingMode(nextFacing);
+    } catch (err) {
+      console.error('[WebRTC] Erro ao inverter câmera:', err);
+    }
+  }, [localStream]);
+
+  return { localStream, remoteStream, connectionState, facingMode, switchCamera };
 }

@@ -1,7 +1,9 @@
 // src/App.jsx
 //
-// Controla em qual "tela" o usuário está: lobby -> searching -> call.
-// Também gerencia a sessão (usuário logado ou não) e o checkout Premium.
+// Controla em qual "tela" o usuário está: lobby -> searching -> call
+// (e agora também friends / groupcall). Também gerencia a sessão
+// (usuário logado ou não), o checkout Premium, e as notificações em
+// tempo real de amigos/chamada em grupo.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { socket } from './lib/socket';
@@ -10,17 +12,24 @@ import Lobby from './components/Lobby';
 import Searching from './components/Searching';
 import CallScreen from './components/CallScreen';
 import AuthModal from './components/AuthModal';
+import FriendsPanel from './components/FriendsPanel';
+import GroupCallScreen from './components/GroupCallScreen';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 export default function App() {
-  const [screen, setScreen] = useState('lobby'); // 'lobby' | 'searching' | 'call'
+  const [screen, setScreen] = useState('lobby'); // 'lobby' | 'searching' | 'call' | 'groupcall'
   const [match, setMatch] = useState(null); // { roomId, peerId, initiator }
+  const [groupRoomId, setGroupRoomId] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   const [user, setUser] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
+
+  const [friendToast, setFriendToast] = useState('');
+  const [incomingGroupInvite, setIncomingGroupInvite] = useState(null); // { roomId, fromUserId, fromUsername }
 
   // Guarda os últimos filtros usados, para o botão "Próximo" repetir a
   // mesma busca sem o usuário precisar reconfigurar tudo de novo.
@@ -33,13 +42,19 @@ export default function App() {
     });
   }, []);
 
+  // O socket fica conectado desde que o app abre (não só durante a busca):
+  // isso é necessário pra receber pedidos de amizade e convites de chamada
+  // em grupo em tempo real, mesmo enquanto o usuário está só navegando.
+  useEffect(() => {
+    if (!socket.connected) socket.connect();
+    return () => socket.disconnect();
+  }, []);
+
   const startSearch = useCallback((filters = {}) => {
     lastFiltersRef.current = filters;
     setErrorMsg('');
     setMatch(null);
     setScreen('searching');
-
-    if (!socket.connected) socket.connect();
     socket.emit('find_match', { filters });
   }, []);
 
@@ -60,14 +75,40 @@ export default function App() {
       startSearch(lastFiltersRef.current);
     }
 
+    function onFriendRequestReceived({ fromUsername }) {
+      setFriendToast(`@${fromUsername} te enviou um pedido de amizade.`);
+      setTimeout(() => setFriendToast(''), 5000);
+    }
+
+    function onGroupCallRoom({ roomId }) {
+      setGroupRoomId(roomId);
+      setScreen('groupcall');
+    }
+
+    function onGroupInviteReceived({ roomId, fromUserId, fromUsername }) {
+      setIncomingGroupInvite({ roomId, fromUserId, fromUsername });
+    }
+
+    function onGroupCallError({ message }) {
+      setErrorMsg(message);
+    }
+
     socket.on('match_found', onMatchFound);
     socket.on('match_error', onMatchError);
     socket.on('peer_left', onPeerLeft);
+    socket.on('friend_request_received', onFriendRequestReceived);
+    socket.on('group_call_room', onGroupCallRoom);
+    socket.on('group_call_invite_received', onGroupInviteReceived);
+    socket.on('group_call_error', onGroupCallError);
 
     return () => {
       socket.off('match_found', onMatchFound);
       socket.off('match_error', onMatchError);
       socket.off('peer_left', onPeerLeft);
+      socket.off('friend_request_received', onFriendRequestReceived);
+      socket.off('group_call_room', onGroupCallRoom);
+      socket.off('group_call_invite_received', onGroupInviteReceived);
+      socket.off('group_call_error', onGroupCallError);
     };
   }, [startSearch]);
 
@@ -85,7 +126,30 @@ export default function App() {
     socket.emit('leave_room');
     setMatch(null);
     setScreen('lobby');
-    socket.disconnect();
+  }, []);
+
+  const startGroupCall = useCallback((friend) => {
+    socket.emit('group_call_invite', { targetUserId: friend.id });
+    setFriendsOpen(false);
+  }, []);
+
+  const acceptGroupInvite = useCallback(() => {
+    if (!incomingGroupInvite) return;
+    socket.emit('group_call_respond', { roomId: incomingGroupInvite.roomId, accept: true });
+    setGroupRoomId(incomingGroupInvite.roomId);
+    setScreen('groupcall');
+    setIncomingGroupInvite(null);
+  }, [incomingGroupInvite]);
+
+  const declineGroupInvite = useCallback(() => {
+    if (!incomingGroupInvite) return;
+    socket.emit('group_call_respond', { roomId: incomingGroupInvite.roomId, accept: false });
+    setIncomingGroupInvite(null);
+  }, [incomingGroupInvite]);
+
+  const leaveGroupCall = useCallback(() => {
+    setGroupRoomId(null);
+    setScreen('lobby');
   }, []);
 
   const handleSubscribe = useCallback(async () => {
@@ -125,6 +189,7 @@ export default function App() {
           errorMsg={errorMsg}
           user={user}
           onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenFriends={() => setFriendsOpen(true)}
           onSubscribe={handleSubscribe}
           subscribing={subscribing}
         />
@@ -135,9 +200,13 @@ export default function App() {
           key={match.roomId}
           roomId={match.roomId}
           initiator={match.initiator}
+          isLoggedIn={!!user}
           onNext={nextMatch}
           onEnd={endCall}
         />
+      )}
+      {screen === 'groupcall' && groupRoomId && (
+        <GroupCallScreen key={groupRoomId} roomId={groupRoomId} onLeave={leaveGroupCall} />
       )}
 
       {authModalOpen && (
@@ -148,6 +217,26 @@ export default function App() {
             setAuthModalOpen(false);
           }}
         />
+      )}
+
+      {friendsOpen && <FriendsPanel onClose={() => setFriendsOpen(false)} onStartGroupCall={startGroupCall} />}
+
+      {friendToast && <div className="app-toast">{friendToast}</div>}
+
+      {incomingGroupInvite && (
+        <div className="app-invite-overlay">
+          <div className="app-invite-card">
+            <p>
+              <strong>@{incomingGroupInvite.fromUsername}</strong> te chamou pra uma chamada em grupo.
+            </p>
+            <div className="app-invite-actions">
+              <button onClick={acceptGroupInvite}>Entrar</button>
+              <button className="muted" onClick={declineGroupInvite}>
+                Recusar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
