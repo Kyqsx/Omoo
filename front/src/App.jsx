@@ -47,7 +47,27 @@ export default function App() {
   // em grupo em tempo real, mesmo enquanto o usuário está só navegando.
   useEffect(() => {
     if (!socket.connected) socket.connect();
-    return () => socket.disconnect();
+
+    function onConnect() {
+      console.log('[Socket] conectado ->', socket.id);
+    }
+    function onDisconnect(reason) {
+      console.log('[Socket] desconectado ->', reason);
+    }
+    function onConnectError(err) {
+      console.error('[Socket] erro de conexão ->', err.message);
+    }
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.disconnect();
+    };
   }, []);
 
   const startSearch = useCallback((filters = {}) => {
@@ -60,6 +80,7 @@ export default function App() {
 
   useEffect(() => {
     function onMatchFound(data) {
+      console.log('[App] match_found ->', data);
       setMatch(data);
       setScreen('call');
     }

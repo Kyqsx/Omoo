@@ -47,11 +47,17 @@ export function useWebRTC({ roomId, initiator, active }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [connectionState, setConnectionState] = useState('new');
+  const [iceConnectionState, setIceConnectionState] = useState('new');
   // 'user' = câmera frontal, 'environment' = câmera traseira (celular)
   const [facingMode, setFacingMode] = useState('user');
 
   const pcRef = useRef(null);
   const facingModeRef = useRef('user');
+
+  const log = useCallback(
+    (...args) => console.log(`[WebRTC][room=${roomId}][initiator=${initiator}]`, ...args),
+    [roomId, initiator]
+  );
 
   const cleanup = useCallback(() => {
     pcRef.current?.close();
@@ -60,6 +66,7 @@ export function useWebRTC({ roomId, initiator, active }) {
     setLocalStream(null);
     setRemoteStream(null);
     setConnectionState('new');
+    setIceConnectionState('new');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStream]);
 
@@ -71,6 +78,8 @@ export function useWebRTC({ roomId, initiator, active }) {
     // Candidatos ICE que chegarem antes de já termos uma remote description
     // aplicada ficam guardados aqui e são aplicados depois, em ordem.
     const pendingCandidates = [];
+
+    log('efeito iniciado — criando RTCPeerConnection');
 
     // Cria a conexão JÁ, de forma síncrona — antes de esperar a câmera.
     // Isso é essencial: se a criação do RTCPeerConnection dependesse do
@@ -84,27 +93,53 @@ export function useWebRTC({ roomId, initiator, active }) {
     pcRef.current = pc;
 
     pc.ontrack = (event) => {
+      log('ontrack — vídeo remoto recebido', event.streams[0]?.id);
       setRemoteStream(event.streams[0]);
     };
 
     pc.onconnectionstatechange = () => {
+      log('connectionState mudou ->', pc.connectionState);
       setConnectionState(pc.connectionState);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      log('iceConnectionState mudou ->', pc.iceConnectionState);
+      setIceConnectionState(pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') {
+        log('ICE falhou — provavelmente falta um servidor TURN pra essa combinação de redes (veja o README).');
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      log('iceGatheringState mudou ->', pc.iceGatheringState);
+    };
+
+    pc.onsignalingstatechange = () => {
+      log('signalingState mudou ->', pc.signalingState);
     };
 
     // Sempre que o navegador descobre uma rota de rede possível,
     // manda pro outro lado via servidor (o servidor só repassa).
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        log('candidato ICE local encontrado, enviando ->', event.candidate.type, event.candidate.protocol);
         socket.emit('webrtc_ice_candidate', { roomId, candidate: event.candidate });
+      } else {
+        log('coleta de candidatos ICE terminou (candidato nulo)');
       }
     };
 
     async function setup() {
+      log('pedindo câmera/microfone...');
       // Pede câmera + microfone ao navegador. facingMode vai como "ideal"
       // (preferência), não como exigência rígida — muita webcam de
       // notebook/desktop não declara suporte a facingMode, e exigir isso
       // faria o getUserMedia falhar por completo nela.
       const stream = await getUserMediaWithFacingMode(facingModeRef.current);
+      log(
+        'câmera/microfone concedidos — tracks:',
+        stream.getTracks().map((t) => `${t.kind}:${t.readyState}`)
+      );
       if (cancelled) {
         stream.getTracks().forEach((t) => t.stop());
         return;
@@ -117,8 +152,10 @@ export function useWebRTC({ roomId, initiator, active }) {
       // assim a offer já sai anunciando áudio+vídeo, sem precisar de
       // uma renegociação depois.
       if (initiator) {
+        log('sou o iniciador — criando offer');
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        log('offer criada e enviada');
         socket.emit('webrtc_offer', { roomId, offer });
       }
     }
@@ -126,6 +163,7 @@ export function useWebRTC({ roomId, initiator, active }) {
     // --- Handlers dos eventos que chegam do outro navegador via servidor ---
 
     async function flushPendingCandidates() {
+      log(`aplicando ${pendingCandidates.length} candidato(s) ICE pendente(s)`);
       while (pendingCandidates.length > 0) {
         const candidate = pendingCandidates.shift();
         try {
@@ -137,6 +175,7 @@ export function useWebRTC({ roomId, initiator, active }) {
     }
 
     async function handleOffer({ offer }) {
+      log('offer recebida do parceiro');
       // Espera as tracks locais estarem prontas antes de responder, pra
       // garantir que a answer já saia com nosso áudio/vídeo incluído.
       while (!localTracksReady && !cancelled) {
@@ -148,10 +187,12 @@ export function useWebRTC({ roomId, initiator, active }) {
       await flushPendingCandidates();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      log('answer criada e enviada');
       socket.emit('webrtc_answer', { roomId, answer });
     }
 
     async function handleAnswer({ answer }) {
+      log('answer recebida do parceiro');
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
       await flushPendingCandidates();
     }
@@ -161,11 +202,13 @@ export function useWebRTC({ roomId, initiator, active }) {
       // Se a remote description ainda não foi aplicada, o candidato não
       // pode ser adicionado ainda — guardamos e aplicamos depois.
       if (!pc.remoteDescription) {
+        log('candidato ICE remoto chegou cedo demais, guardando na fila');
         pendingCandidates.push(candidate);
         return;
       }
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        log('candidato ICE remoto aplicado ->', candidate.type, candidate.protocol);
       } catch (err) {
         console.error('[WebRTC] Erro ao adicionar ICE candidate:', err);
       }
@@ -180,6 +223,7 @@ export function useWebRTC({ roomId, initiator, active }) {
     });
 
     return () => {
+      log('efeito desmontado — limpando conexão');
       cancelled = true;
       socket.off('webrtc_offer', handleOffer);
       socket.off('webrtc_answer', handleAnswer);
@@ -226,5 +270,5 @@ export function useWebRTC({ roomId, initiator, active }) {
     }
   }, [localStream]);
 
-  return { localStream, remoteStream, connectionState, facingMode, switchCamera };
+  return { localStream, remoteStream, connectionState, iceConnectionState, facingMode, switchCamera };
 }

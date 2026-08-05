@@ -26,7 +26,7 @@ import ReportModal from './ReportModal';
 import './callscreen.css';
 
 export default function CallScreen({ roomId, initiator, isLoggedIn, onNext, onEnd }) {
-  const { localStream, remoteStream, connectionState, switchCamera } = useWebRTC({
+  const { localStream, remoteStream, connectionState, iceConnectionState, switchCamera } = useWebRTC({
     roomId,
     initiator,
     active: true,
@@ -104,8 +104,13 @@ export default function CallScreen({ roomId, initiator, isLoggedIn, onNext, onEn
         <div className="call-remote">
           {isConnecting && (
             <div className="call-connecting">
-              <span className="call-connecting-pulse" />
-              Conectando...
+              <div className="call-connecting-row">
+                <span className="call-connecting-pulse" />
+                Conectando...
+              </div>
+              <span className="call-connecting-debug">
+                {connectionState} / ice: {iceConnectionState}
+              </span>
             </div>
           )}
           <video ref={remoteVideoRef} autoPlay playsInline className="call-remote-video" />

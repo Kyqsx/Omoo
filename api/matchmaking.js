@@ -204,14 +204,18 @@ function registerMatchmakingHandlers(io, redisClient) {
     // (offer/answer/ice candidates) de um lado para o outro dentro da room.
     // ------------------------------------------------------------------
     socket.on('webrtc_offer', ({ roomId, offer }) => {
+      const roomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
+      console.log(`[Signaling] offer de ${socket.id} na sala ${roomId} (${roomSize} sockets na sala)`);
       socket.to(roomId).emit('webrtc_offer', { offer, from: socket.id });
     });
 
     socket.on('webrtc_answer', ({ roomId, answer }) => {
+      console.log(`[Signaling] answer de ${socket.id} na sala ${roomId}`);
       socket.to(roomId).emit('webrtc_answer', { answer, from: socket.id });
     });
 
     socket.on('webrtc_ice_candidate', ({ roomId, candidate }) => {
+      console.log(`[Signaling] ICE candidate de ${socket.id} na sala ${roomId} (${candidate?.type || '?'})`);
       socket.to(roomId).emit('webrtc_ice_candidate', { candidate, from: socket.id });
     });
 
