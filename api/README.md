@@ -316,3 +316,17 @@ pessoas) e a primeira versão do dashboard admin.
 A presença (`social.js`) usa Redis Sets, então já funciona mesmo se você
 rodar mais de uma instância do backend na Railway — não depende de estado
 em memória de um processo só.
+
+### Se a chamada ainda ficar presa em "Conectando..."
+
+Corrigimos uma corrida (offer/answer chegando antes da conexão local
+existir), que era a causa mais comum disso. Se mesmo assim continuar
+acontecendo com pessoas em redes diferentes (uma no 4G, outra numa rede
+corporativa, etc.), o motivo provável é a ausência de um servidor **TURN**
+— hoje só temos STUN (`stun:stun.l.google.com:19302`), que só funciona
+quando os dois lados conseguem abrir uma rota direta. Redes com NAT
+simétrico/firewall restritivo não conseguem, e nesse caso é obrigatório
+ter um TURN relay. Opções rápidas: um serviço gerenciado (ex: Metered,
+Twilio Network Traversal, Cloudflare Calls) ou seu próprio `coturn`. Depois
+é só adicionar as credenciais no array `ICE_SERVERS` de
+`front/src/hooks/useWebRTC.js` e `useGroupWebRTC.js`.

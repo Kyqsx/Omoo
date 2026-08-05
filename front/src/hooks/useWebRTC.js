@@ -67,45 +67,55 @@ export function useWebRTC({ roomId, initiator, active }) {
     if (!active || !roomId) return;
 
     let cancelled = false;
+    let localTracksReady = false;
+    // Candidatos ICE que chegarem antes de já termos uma remote description
+    // aplicada ficam guardados aqui e são aplicados depois, em ordem.
+    const pendingCandidates = [];
+
+    // Cria a conexão JÁ, de forma síncrona — antes de esperar a câmera.
+    // Isso é essencial: se a criação do RTCPeerConnection dependesse do
+    // await da câmera (como era antes), e o outro lado mandasse a oferta
+    // enquanto essa pessoa ainda não tivesse aceitado a permissão de
+    // câmera/microfone, a oferta chegaria sem ninguém pra recebê-la e
+    // seria descartada — a chamada ficava presa em "Conectando..." pra
+    // sempre. Agora a conexão (e os listeners) já existem no instante em
+    // que este efeito roda; só as TRACKS locais é que chegam depois.
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    pcRef.current = pc;
+
+    pc.ontrack = (event) => {
+      setRemoteStream(event.streams[0]);
+    };
+
+    pc.onconnectionstatechange = () => {
+      setConnectionState(pc.connectionState);
+    };
+
+    // Sempre que o navegador descobre uma rota de rede possível,
+    // manda pro outro lado via servidor (o servidor só repassa).
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('webrtc_ice_candidate', { roomId, candidate: event.candidate });
+      }
+    };
 
     async function setup() {
-      // 1) Pede câmera + microfone ao navegador.
-      // IMPORTANTE: facingMode vai como "ideal", não como exigência rígida.
-      // Muita webcam de notebook/desktop não declara suporte a
-      // facingMode — se a gente exigisse ("exact"), o navegador rejeita
-      // com OverconstrainedError, getUserMedia falha, e essa pessoa nunca
-      // chega a criar a RTCPeerConnection nem enviar vídeo pro parceiro
-      // (por isso o vídeo do outro lado simplesmente não aparecia).
+      // Pede câmera + microfone ao navegador. facingMode vai como "ideal"
+      // (preferência), não como exigência rígida — muita webcam de
+      // notebook/desktop não declara suporte a facingMode, e exigir isso
+      // faria o getUserMedia falhar por completo nela.
       const stream = await getUserMediaWithFacingMode(facingModeRef.current);
       if (cancelled) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
       setLocalStream(stream);
-
-      // 2) Cria a conexão peer-to-peer
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      pcRef.current = pc;
-
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      localTracksReady = true;
 
-      pc.ontrack = (event) => {
-        setRemoteStream(event.streams[0]);
-      };
-
-      pc.onconnectionstatechange = () => {
-        setConnectionState(pc.connectionState);
-      };
-
-      // Sempre que o navegador descobre uma rota de rede possível,
-      // manda pro outro lado via servidor (o servidor só repassa).
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('webrtc_ice_candidate', { roomId, candidate: event.candidate });
-        }
-      };
-
-      // 3) Se este lado é o "iniciador", cria a offer primeiro.
+      // Só cria a offer DEPOIS de já ter adicionado as tracks locais —
+      // assim a offer já sai anunciando áudio+vídeo, sem precisar de
+      // uma renegociação depois.
       if (initiator) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -115,24 +125,45 @@ export function useWebRTC({ roomId, initiator, active }) {
 
     // --- Handlers dos eventos que chegam do outro navegador via servidor ---
 
+    async function flushPendingCandidates() {
+      while (pendingCandidates.length > 0) {
+        const candidate = pendingCandidates.shift();
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error('[WebRTC] Erro ao aplicar ICE candidate pendente:', err);
+        }
+      }
+    }
+
     async function handleOffer({ offer }) {
-      const pc = pcRef.current;
-      if (!pc) return;
+      // Espera as tracks locais estarem prontas antes de responder, pra
+      // garantir que a answer já saia com nosso áudio/vídeo incluído.
+      while (!localTracksReady && !cancelled) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (cancelled) return;
+
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await flushPendingCandidates();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('webrtc_answer', { roomId, answer });
     }
 
     async function handleAnswer({ answer }) {
-      const pc = pcRef.current;
-      if (!pc) return;
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushPendingCandidates();
     }
 
     async function handleIceCandidate({ candidate }) {
-      const pc = pcRef.current;
-      if (!pc || !candidate) return;
+      if (!candidate) return;
+      // Se a remote description ainda não foi aplicada, o candidato não
+      // pode ser adicionado ainda — guardamos e aplicamos depois.
+      if (!pc.remoteDescription) {
+        pendingCandidates.push(candidate);
+        return;
+      }
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {

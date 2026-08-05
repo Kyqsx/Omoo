@@ -45,13 +45,15 @@ export function useGroupWebRTC({ roomId, active }) {
     });
   }, []);
 
-  const createPeerConnection = useCallback(
-    (targetSocketId) => {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  useEffect(() => {
+    if (!active || !roomId) return;
 
-      localStreamRef.current?.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current);
-      });
+    let cancelled = false;
+
+    function createPeerConnection(targetSocketId) {
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      pc._tracksAdded = false;
+      pc._pendingCandidates = [];
 
       pc.ontrack = (event) => {
         setRemoteStreams((prev) => ({ ...prev, [targetSocketId]: event.streams[0] }));
@@ -65,24 +67,45 @@ export function useGroupWebRTC({ roomId, active }) {
 
       pcMapRef.current.set(targetSocketId, pc);
       return pc;
-    },
-    []
-  );
+    }
 
-  const offerTo = useCallback(
-    async (targetSocketId) => {
+    /**
+     * Espera a câmera local ficar pronta e garante que as tracks foram
+     * adicionadas a essa conexão. Sem isso, se a offer/answer chegasse
+     * antes de terminarmos de pedir a câmera (ex: usuário demorou pra
+     * clicar em "Permitir"), a conexão era criada sem nenhum vídeo local
+     * — e como não renegociamos depois, aquele lado nunca aparecia pro
+     * resto do grupo.
+     */
+    async function ensureTracksAdded(pc) {
+      if (pc._tracksAdded) return;
+      while (!localStreamRef.current && !cancelled) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (cancelled || pc._tracksAdded) return;
+      localStreamRef.current.getTracks().forEach((track) => pc.addTrack(track, localStreamRef.current));
+      pc._tracksAdded = true;
+    }
+
+    async function flushPendingCandidates(pc) {
+      while (pc._pendingCandidates.length > 0) {
+        const candidate = pc._pendingCandidates.shift();
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error('[GroupWebRTC] Erro ao aplicar ICE candidate pendente:', err);
+        }
+      }
+    }
+
+    async function offerTo(targetSocketId) {
       const pc = pcMapRef.current.get(targetSocketId) || createPeerConnection(targetSocketId);
+      await ensureTracksAdded(pc);
+      if (cancelled) return;
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('group_webrtc_offer', { targetSocketId, offer });
-    },
-    [createPeerConnection]
-  );
-
-  useEffect(() => {
-    if (!active || !roomId) return;
-
-    let cancelled = false;
+    }
 
     async function init() {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -114,7 +137,10 @@ export function useGroupWebRTC({ roomId, active }) {
 
     async function handleOffer({ offer, from }) {
       const pc = pcMapRef.current.get(from) || createPeerConnection(from);
+      await ensureTracksAdded(pc);
+      if (cancelled) return;
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await flushPendingCandidates(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('group_webrtc_answer', { targetSocketId: from, answer });
@@ -124,11 +150,16 @@ export function useGroupWebRTC({ roomId, active }) {
       const pc = pcMapRef.current.get(from);
       if (!pc) return;
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushPendingCandidates(pc);
     }
 
     async function handleIceCandidate({ candidate, from }) {
       const pc = pcMapRef.current.get(from);
       if (!pc || !candidate) return;
+      if (!pc.remoteDescription) {
+        pc._pendingCandidates.push(candidate);
+        return;
+      }
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (err) {
