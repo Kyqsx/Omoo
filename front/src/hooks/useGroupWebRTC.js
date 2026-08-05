@@ -86,7 +86,7 @@ export function useGroupWebRTC({ roomId, active }) {
 
     async function init() {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingModeRef.current },
+        video: { facingMode: { ideal: facingModeRef.current } },
         audio: true,
       });
       if (cancelled) {
@@ -170,7 +170,7 @@ export function useGroupWebRTC({ roomId, active }) {
     const nextFacing = facingModeRef.current === 'user' ? 'environment' : 'user';
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: nextFacing },
+        video: { facingMode: { ideal: nextFacing } },
         audio: false,
       });
       const newTrack = newStream.getVideoTracks()[0];

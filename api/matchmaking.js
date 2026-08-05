@@ -25,12 +25,20 @@ const { verifyToken } = require('./authController');
 const QUEUE_GERAL = 'fila:geral';
 
 /**
- * Monta o nome da chave de fila filtrada, ex: "fila:pais:brasil" ou
- * "fila:genero:feminino". Mantemos tudo em minúsculo para evitar filas
- * duplicadas por causa de maiúsculas/minúsculas.
+ * Monta o nome da chave de fila filtrada a partir de TODOS os filtros
+ * ativos, ex: { country: 'brasil', gender: 'feminino' } vira
+ * "fila:country:brasil:gender:feminino". Ordenamos as chaves em ordem
+ * alfabética pra sempre gerar a mesma string independente da ordem em
+ * que o filtro foi montado no frontend — senão duas pessoas com os
+ * mesmos filtros cairiam em filas diferentes e nunca se encontrariam.
  */
-function buildFilteredQueueKey(filterType, filterValue) {
-  return `fila:${filterType}:${String(filterValue).toLowerCase()}`;
+function buildFilteredQueueKey(filters) {
+  const parts = Object.entries(filters)
+    .filter(([, value]) => value) // ignora filtro vazio/"qualquer"
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, value]) => `${type}:${String(value).toLowerCase()}`);
+
+  return parts.length > 0 ? `fila:${parts.join(':')}` : QUEUE_GERAL;
 }
 
 /**
@@ -165,12 +173,7 @@ function registerMatchmakingHandlers(io, redisClient) {
         let queueKey = QUEUE_GERAL;
 
         if (premium && filters && Object.keys(filters).length > 0) {
-          // Por simplicidade, usamos o PRIMEIRO filtro informado para montar
-          // a chave da fila (ex: { country: 'brasil' } -> "fila:country:brasil").
-          // Se quiser combinar múltiplos filtros, dá para concatenar tudo na
-          // chave, ex: "fila:country:brasil:gender:feminino".
-          const [filterType, filterValue] = Object.entries(filters)[0];
-          queueKey = buildFilteredQueueKey(filterType, filterValue);
+          queueKey = buildFilteredQueueKey(filters);
         }
         // Se for Free (ou Premium sem filtro), cai na fila geral.
 

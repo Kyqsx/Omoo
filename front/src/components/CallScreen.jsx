@@ -5,6 +5,20 @@
 // de "próximo" (encerra e busca outro par) e o painel de chat.
 
 import { useEffect, useRef, useState } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faMicrophone,
+  faMicrophoneSlash,
+  faVideo,
+  faVideoSlash,
+  faCameraRotate,
+  faComment,
+  faUserPlus,
+  faFlag,
+  faForward,
+  faPhoneSlash,
+  faCheck,
+} from '@fortawesome/free-solid-svg-icons';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { socket } from '../lib/socket';
 import ChatPanel from './ChatPanel';
@@ -104,23 +118,25 @@ export default function CallScreen({ roomId, initiator, isLoggedIn, onNext, onEn
             className={`call-btn ${!micOn ? 'off' : ''}`}
             onClick={toggleMic}
             aria-label={micOn ? 'Desligar microfone' : 'Ligar microfone'}
+            title={micOn ? 'Desligar microfone' : 'Ligar microfone'}
           >
-            {micOn ? 'Mic' : 'Mudo'}
+            <FontAwesomeIcon icon={micOn ? faMicrophone : faMicrophoneSlash} />
           </button>
           <button
             className={`call-btn ${!camOn ? 'off' : ''}`}
             onClick={toggleCam}
             aria-label={camOn ? 'Desligar câmera' : 'Ligar câmera'}
+            title={camOn ? 'Desligar câmera' : 'Ligar câmera'}
           >
-            {camOn ? 'Câmera' : 'Sem câmera'}
+            <FontAwesomeIcon icon={camOn ? faVideo : faVideoSlash} />
           </button>
           {hasMultipleCameras && (
-            <button className="call-btn" onClick={switchCamera} aria-label="Inverter câmera">
-              Inverter câmera
+            <button className="call-btn" onClick={switchCamera} aria-label="Inverter câmera" title="Inverter câmera">
+              <FontAwesomeIcon icon={faCameraRotate} />
             </button>
           )}
-          <button className="call-btn" onClick={() => setChatOpen((v) => !v)}>
-            Chat
+          <button className="call-btn" onClick={() => setChatOpen((v) => !v)} aria-label="Chat" title="Chat">
+            <FontAwesomeIcon icon={faComment} />
           </button>
           {isLoggedIn && (
             <button
@@ -128,18 +144,19 @@ export default function CallScreen({ roomId, initiator, isLoggedIn, onNext, onEn
               onClick={handleAddFriend}
               disabled={friendStatus === 'sent'}
               aria-label="Adicionar amigo"
+              title={friendStatus === 'sent' ? 'Pedido enviado' : 'Adicionar amigo'}
             >
-              {friendStatus === 'sent' ? 'Pedido enviado' : 'Adicionar amigo'}
+              <FontAwesomeIcon icon={friendStatus === 'sent' ? faCheck : faUserPlus} />
             </button>
           )}
-          <button className="call-btn report" onClick={() => setReportOpen(true)}>
-            Denunciar
+          <button className="call-btn report" onClick={() => setReportOpen(true)} aria-label="Denunciar" title="Denunciar">
+            <FontAwesomeIcon icon={faFlag} />
           </button>
-          <button className="call-btn next" onClick={onNext}>
-            Próximo
+          <button className="call-btn next" onClick={onNext} aria-label="Próximo" title="Próximo">
+            <FontAwesomeIcon icon={faForward} />
           </button>
-          <button className="call-btn end" onClick={onEnd}>
-            Sair
+          <button className="call-btn end" onClick={onEnd} aria-label="Sair" title="Sair">
+            <FontAwesomeIcon icon={faPhoneSlash} />
           </button>
         </div>
 

@@ -26,6 +26,23 @@ import { socket } from '../lib/socket';
 // não é possível (redes corporativas/4G restritivas). Veja o README.
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
+/**
+ * Pede câmera+mic com facingMode como preferência ("ideal"), e se mesmo
+ * assim falhar (dispositivo/navegador estranho), cai para vídeo genérico
+ * em vez de deixar a chamada inteira quebrar.
+ */
+async function getUserMediaWithFacingMode(facingMode) {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facingMode } },
+      audio: true,
+    });
+  } catch (err) {
+    console.warn('[WebRTC] facingMode ideal falhou, tentando vídeo genérico:', err);
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  }
+}
+
 export function useWebRTC({ roomId, initiator, active }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -52,11 +69,14 @@ export function useWebRTC({ roomId, initiator, active }) {
     let cancelled = false;
 
     async function setup() {
-      // 1) Pede câmera + microfone ao navegador
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingModeRef.current },
-        audio: true,
-      });
+      // 1) Pede câmera + microfone ao navegador.
+      // IMPORTANTE: facingMode vai como "ideal", não como exigência rígida.
+      // Muita webcam de notebook/desktop não declara suporte a
+      // facingMode — se a gente exigisse ("exact"), o navegador rejeita
+      // com OverconstrainedError, getUserMedia falha, e essa pessoa nunca
+      // chega a criar a RTCPeerConnection nem enviar vídeo pro parceiro
+      // (por isso o vídeo do outro lado simplesmente não aparecia).
+      const stream = await getUserMediaWithFacingMode(facingModeRef.current);
       if (cancelled) {
         stream.getTracks().forEach((t) => t.stop());
         return;
@@ -152,7 +172,7 @@ export function useWebRTC({ roomId, initiator, active }) {
 
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: nextFacing },
+        video: { facingMode: { ideal: nextFacing } },
         audio: false,
       });
       const newVideoTrack = newStream.getVideoTracks()[0];

@@ -17,6 +17,9 @@
 }
 
 .group-call-invite-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: var(--accent-soft);
   color: var(--accent);
   border: none;

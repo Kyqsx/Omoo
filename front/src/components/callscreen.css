@@ -86,24 +86,36 @@
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100% - 24px);
+  gap: 8px;
   background: rgba(20, 21, 26, 0.85);
   backdrop-filter: blur(6px);
-  padding: 10px;
-  border-radius: 999px;
+  padding: 8px;
+  border-radius: 28px;
   border: 1px solid var(--panel-border);
 }
 
 .call-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   background: transparent;
   border: none;
   color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 10px 16px;
-  border-radius: 999px;
+  font-size: 16px;
+  padding: 0;
+  border-radius: 50%;
   cursor: pointer;
   transition: background 0.15s ease;
+}
+
+.call-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .call-btn:hover {

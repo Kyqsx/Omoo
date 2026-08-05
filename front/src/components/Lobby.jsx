@@ -10,19 +10,28 @@ import { logout } from '../lib/auth';
 import './lobby.css';
 
 const COUNTRIES = [
+  { value: '', label: 'Qualquer país' },
   { value: 'brasil', label: 'Brasil' },
   { value: 'portugal', label: 'Portugal' },
   { value: 'eua', label: 'Estados Unidos' },
 ];
 
+const GENDERS = [
+  { value: '', label: 'Qualquer gênero' },
+  { value: 'masculino', label: 'Masculino' },
+  { value: 'feminino', label: 'Feminino' },
+  { value: 'outro', label: 'Outro' },
+];
+
 export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onOpenFriends, onSubscribe, subscribing }) {
-  const [country, setCountry] = useState(COUNTRIES[0].value);
+  const [country, setCountry] = useState('');
+  const [gender, setGender] = useState('');
 
   const isPremium = user?.is_premium === true;
 
   function handleStart() {
     if (isPremium) {
-      onStart({ country });
+      onStart({ country, gender });
     } else {
       onStart({});
     }
@@ -83,6 +92,16 @@ export default function Lobby({ onStart, errorMsg, user, onOpenAuth, onOpenFrien
                 {COUNTRIES.map((c) => (
                   <option key={c.value} value={c.value}>
                     {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Filtrar por gênero
+              <select value={gender} onChange={(e) => setGender(e.target.value)}>
+                {GENDERS.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
                   </option>
                 ))}
               </select>

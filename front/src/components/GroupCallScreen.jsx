@@ -4,6 +4,16 @@
 // painel pra convidar mais amigos (enquanto não bater o teto de 4).
 
 import { useEffect, useRef, useState } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faMicrophone,
+  faMicrophoneSlash,
+  faVideo,
+  faVideoSlash,
+  faCameraRotate,
+  faUserPlus,
+  faPhoneSlash,
+} from '@fortawesome/free-solid-svg-icons';
 import { useGroupWebRTC } from '../hooks/useGroupWebRTC';
 import { socket } from '../lib/socket';
 import { listFriends } from '../lib/friends';
@@ -74,8 +84,8 @@ export default function GroupCallScreen({ roomId, onLeave }) {
       <div className="group-call-header">
         <span>Chamada em grupo — {totalCount}/{MAX_PARTICIPANTS}</span>
         {totalCount < MAX_PARTICIPANTS && (
-          <button className="group-call-invite-btn" onClick={openInvitePanel}>
-            + Convidar amigo
+          <button className="group-call-invite-btn" onClick={openInvitePanel} title="Convidar amigo">
+            <FontAwesomeIcon icon={faUserPlus} /> Convidar amigo
           </button>
         )}
       </div>
@@ -88,17 +98,25 @@ export default function GroupCallScreen({ roomId, onLeave }) {
       </div>
 
       <div className="group-call-controls">
-        <button className={`call-btn ${!micOn ? 'off' : ''}`} onClick={toggleMic}>
-          {micOn ? 'Mic' : 'Mudo'}
+        <button
+          className={`call-btn ${!micOn ? 'off' : ''}`}
+          onClick={toggleMic}
+          title={micOn ? 'Desligar microfone' : 'Ligar microfone'}
+        >
+          <FontAwesomeIcon icon={micOn ? faMicrophone : faMicrophoneSlash} />
         </button>
-        <button className={`call-btn ${!camOn ? 'off' : ''}`} onClick={toggleCam}>
-          {camOn ? 'Câmera' : 'Sem câmera'}
+        <button
+          className={`call-btn ${!camOn ? 'off' : ''}`}
+          onClick={toggleCam}
+          title={camOn ? 'Desligar câmera' : 'Ligar câmera'}
+        >
+          <FontAwesomeIcon icon={camOn ? faVideo : faVideoSlash} />
         </button>
-        <button className="call-btn" onClick={switchCamera}>
-          Inverter câmera
+        <button className="call-btn" onClick={switchCamera} title="Inverter câmera">
+          <FontAwesomeIcon icon={faCameraRotate} />
         </button>
-        <button className="call-btn end" onClick={handleLeave}>
-          Sair
+        <button className="call-btn end" onClick={handleLeave} title="Sair">
+          <FontAwesomeIcon icon={faPhoneSlash} />
         </button>
       </div>
 
