@@ -58,6 +58,19 @@ async function getUserMediaWithFacingMode(facingMode) {
   }
 }
 
+/**
+ * O candidato ICE que chega pela rede (via socket.io) é só um objeto JSON
+ * simples ({candidate, sdpMid, ...}) — diferente do RTCIceCandidate local,
+ * ele não tem as propriedades .type/.protocol prontas. Pra debug, extraímos
+ * na mão a partir da linha SDP bruta (ex: "...typ relay raddr...").
+ */
+function describeCandidateString(candidateStr) {
+  if (!candidateStr) return 'sem candidato (fim da coleta)';
+  const typeMatch = candidateStr.match(/typ (\w+)/);
+  const protoMatch = candidateStr.match(/UDP|TCP/i);
+  return `${typeMatch?.[1] || '?'} ${protoMatch?.[0]?.toLowerCase() || '?'}`;
+}
+
 export function useWebRTC({ roomId, initiator, active }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
@@ -106,6 +119,24 @@ export function useWebRTC({ roomId, initiator, active }) {
     // que este efeito roda; só as TRACKS locais é que chegam depois.
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
+
+    // Log crítico pra debug: mostra EXATAMENTE quais servidores STUN/TURN
+    // esse build está usando. Se aqui não aparecer nenhuma entrada com
+    // "turn:", o deploy que está no ar ainda não tem o TURN configurado.
+    log('ICE servers configurados nesta conexão ->', pc.getConfiguration().iceServers);
+
+    // Dispara quando o navegador tenta contatar um STUN/TURN e falha —
+    // diferente de onicecandidate, isso avisa o ERRO específico (ex: TURN
+    // com credencial errada, host inalcançável, etc.), coisa que
+    // normalmente falha em silêncio sem esse listener.
+    pc.onicecandidateerror = (event) => {
+      console.error(
+        `[WebRTC][room=${roomId}] falha ao contatar servidor ICE ->`,
+        event.url,
+        `código ${event.errorCode}:`,
+        event.errorText
+      );
+    };
 
     pc.ontrack = (event) => {
       log('ontrack — vídeo remoto recebido', event.streams[0]?.id);
@@ -223,7 +254,7 @@ export function useWebRTC({ roomId, initiator, active }) {
       }
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        log('candidato ICE remoto aplicado ->', candidate.type, candidate.protocol);
+        log('candidato ICE remoto aplicado ->', describeCandidateString(candidate.candidate));
       } catch (err) {
         console.error('[WebRTC] Erro ao adicionar ICE candidate:', err);
       }

@@ -215,7 +215,8 @@ function registerMatchmakingHandlers(io, redisClient) {
     });
 
     socket.on('webrtc_ice_candidate', ({ roomId, candidate }) => {
-      console.log(`[Signaling] ICE candidate de ${socket.id} na sala ${roomId} (${candidate?.type || '?'})`);
+      const typeMatch = candidate?.candidate?.match(/typ (\w+)/);
+      console.log(`[Signaling] ICE candidate de ${socket.id} na sala ${roomId} (${typeMatch?.[1] || '?'})`);
       socket.to(roomId).emit('webrtc_ice_candidate', { candidate, from: socket.id });
     });
 
